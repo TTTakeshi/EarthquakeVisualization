@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { GoogleMap, MarkerF, useJsApiLoader } from "@react-google-maps/api";
 import { computeMetrics, magnitudeTone, sortByRecency, type EarthquakeEvent } from "@/lib/earthquakes";
 
@@ -67,6 +67,60 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
       count: events.filter((event) => event.magnitude >= 6.0).length
     }
   ];
+
+  const chartEvents = filteredEvents.length > 0 ? filteredEvents : events;
+
+  const timeBands = useMemo(() => {
+    return [
+      {
+        label: "深夜 (0-3時)",
+        value: chartEvents.filter((event) => inHourRange(event.issuedAt, 0, 3)).length
+      },
+      {
+        label: "早朝 (4-7時)",
+        value: chartEvents.filter((event) => inHourRange(event.issuedAt, 4, 7)).length
+      },
+      {
+        label: "朝 (8-11時)",
+        value: chartEvents.filter((event) => inHourRange(event.issuedAt, 8, 11)).length
+      },
+      {
+        label: "昼 (12-15時)",
+        value: chartEvents.filter((event) => inHourRange(event.issuedAt, 12, 15)).length
+      },
+      {
+        label: "夕方 (16-19時)",
+        value: chartEvents.filter((event) => inHourRange(event.issuedAt, 16, 19)).length
+      },
+      {
+        label: "夜 (20-23時)",
+        value: chartEvents.filter((event) => inHourRange(event.issuedAt, 20, 23)).length
+      }
+    ];
+  }, [chartEvents]);
+
+  const depthBands = useMemo(() => {
+    return [
+      { label: "浅い (0-30km)", value: chartEvents.filter((event) => event.depthKm <= 30).length },
+      { label: "中間 (31-70km)", value: chartEvents.filter((event) => event.depthKm > 30 && event.depthKm <= 70).length },
+      { label: "深い (71km以上)", value: chartEvents.filter((event) => event.depthKm > 70).length }
+    ];
+  }, [chartEvents]);
+
+  const magnitudeHistogram = useMemo(() => {
+    return [
+      { label: "M4.4以下", value: chartEvents.filter((event) => event.magnitude < 4.5).length },
+      {
+        label: "M4.5-4.9",
+        value: chartEvents.filter((event) => event.magnitude >= 4.5 && event.magnitude < 5.0).length
+      },
+      {
+        label: "M5.0-5.9",
+        value: chartEvents.filter((event) => event.magnitude >= 5.0 && event.magnitude < 6.0).length
+      },
+      { label: "M6.0以上", value: chartEvents.filter((event) => event.magnitude >= 6.0).length }
+    ];
+  }, [chartEvents]);
 
   if (!selectedEvent) {
     return (
@@ -232,6 +286,30 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
         </aside>
       </section>
 
+      <section className="panel chart-panel">
+        <div className="panel-header">
+          <div>
+            <span className="panel-kicker">stats</span>
+            <h2>統計チャート</h2>
+          </div>
+          <p className="panel-note">現在の表示条件で {chartEvents.length} 件を集計</p>
+        </div>
+
+        <div className="chart-grid">
+          <ChartCard title="時間帯別件数" description="発生時刻を6区分で集計">
+            <BarChart items={timeBands} tone="accent" />
+          </ChartCard>
+
+          <ChartCard title="深さ分布" description="震源深さの偏りを確認">
+            <BarChart items={depthBands} tone="warning" />
+          </ChartCard>
+
+          <ChartCard title="規模ヒストグラム" description="マグニチュード帯ごとの件数">
+            <BarChart items={magnitudeHistogram} tone="danger" />
+          </ChartCard>
+        </div>
+      </section>
+
       <section className="panel list-panel">
         <div className="panel-header">
           <div>
@@ -276,6 +354,62 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
         </div>
       </section>
     </main>
+  );
+}
+
+function inHourRange(issuedAt: string, minHour: number, maxHour: number) {
+  const time = issuedAt.split(" ")[1] ?? "";
+  const hour = Number(time.split(":")[0]);
+
+  return Number.isFinite(hour) && hour >= minHour && hour <= maxHour;
+}
+
+function ChartCard({
+  title,
+  description,
+  children
+}: {
+  title: string;
+  description: string;
+  children: ReactNode;
+}) {
+  return (
+    <article className="chart-card">
+      <h3>{title}</h3>
+      <p>{description}</p>
+      {children}
+    </article>
+  );
+}
+
+function BarChart({
+  items,
+  tone
+}: {
+  items: Array<{ label: string; value: number }>;
+  tone: "accent" | "warning" | "danger";
+}) {
+  const maxValue = Math.max(...items.map((item) => item.value), 1);
+
+  return (
+    <div className="chart-list" role="img" aria-label="地震統計の棒グラフ">
+      {items.map((item) => {
+        const ratio = item.value / maxValue;
+        const fillWidth = item.value === 0 ? 0 : Math.max(8, Math.round(ratio * 100));
+
+        return (
+          <div className="chart-row" key={item.label}>
+            <div className="chart-row-head">
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+            </div>
+            <div className="chart-track" aria-hidden="true">
+              <i className={`chart-fill chart-fill-${tone}`} style={{ width: `${fillWidth}%` }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
