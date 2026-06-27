@@ -2,7 +2,14 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { GoogleMap, MarkerF, useJsApiLoader } from "@react-google-maps/api";
-import { computeMetrics, magnitudeTone, sortByRecency, type EarthquakeEvent } from "@/lib/earthquakes";
+import {
+  classifyMagnitude,
+  computeMetrics,
+  magnitudeDisplay,
+  magnitudeTone,
+  sortByRecency,
+  type EarthquakeEvent
+} from "@/lib/earthquakes";
 
 const focusLevels = [
   { value: 0, label: "すべて" },
@@ -13,10 +20,42 @@ const focusLevels = [
 ];
 const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
 
-const markerIconByTone: Record<ReturnType<typeof magnitudeTone>, string> = {
-  calm: "https://maps.google.com/mapfiles/ms/icons/ltblue-dot.png",
-  warning: "https://maps.google.com/mapfiles/ms/icons/orange-dot.png",
-  danger: "https://maps.google.com/mapfiles/ms/icons/red-dot.png"
+const magnitudeBandOrder = ["micro", "minor", "light", "moderate", "strong", "major", "great"] as const;
+
+const magnitudeBandLabels: Record<(typeof magnitudeBandOrder)[number], string> = {
+  micro: "Micro",
+  minor: "Minor",
+  light: "Light",
+  moderate: "Moderate",
+  strong: "Strong",
+  major: "Major",
+  great: "Great"
+};
+
+const magnitudeBandRanges: Record<(typeof magnitudeBandOrder)[number], string> = {
+  micro: "M0.0-1.9",
+  minor: "M2.0-3.9",
+  light: "M4.0-4.9",
+  moderate: "M5.0-5.9",
+  strong: "M6.0-6.9",
+  major: "M7.0-7.9",
+  great: "M8.0+"
+};
+
+const bandColorByTone: Record<ReturnType<typeof magnitudeTone>, string> = {
+  calm: "#5be7d5",
+  warning: "#ffb35c",
+  danger: "#ff6c63"
+};
+
+const bandSizeByMagnitude: Record<(typeof magnitudeBandOrder)[number], number> = {
+  micro: 18,
+  minor: 20,
+  light: 24,
+  moderate: 30,
+  strong: 36,
+  major: 42,
+  great: 48
 };
 
 export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
@@ -35,11 +74,15 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
 
   const selectedEvent = filteredEvents.find((event) => event.id === selectedId) ?? filteredEvents[0] ?? events[0];
   const metrics = computeMetrics(filteredEvents.length > 0 ? filteredEvents : events);
+  const selectedMagnitudeDisplay = selectedEvent ? magnitudeDisplay(selectedEvent.magnitude) : undefined;
+  const selectedMagnitudeTone = selectedEvent ? magnitudeTone(selectedEvent.magnitude) : "calm";
 
   const mapCenter = useMemo(
     () => ({ lat: selectedEvent?.latitude ?? 36.2048, lng: selectedEvent?.longitude ?? 138.2529 }),
     [selectedEvent?.latitude, selectedEvent?.longitude]
   );
+
+  const mapZoom = useMemo(() => getMapZoom(selectedEvent?.magnitude ?? 0), [selectedEvent?.magnitude]);
 
   const mapOptions = useMemo(
     () => ({
@@ -53,20 +96,16 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
     []
   );
 
-  const magnitudeBands = [
-    {
-      label: "M4.5以上",
-      count: events.filter((event) => event.magnitude >= 4.5).length
-    },
-    {
-      label: "M5.0以上",
-      count: events.filter((event) => event.magnitude >= 5.0).length
-    },
-    {
-      label: "M6.0以上",
-      count: events.filter((event) => event.magnitude >= 6.0).length
-    }
-  ];
+  const magnitudeBands = useMemo(
+    () =>
+      magnitudeBandOrder.map((band) => ({
+        band,
+        label: magnitudeBandLabels[band],
+        range: magnitudeBandRanges[band],
+        count: events.filter((event) => classifyMagnitude(event.magnitude).band === band).length
+      })),
+    [events]
+  );
 
   const chartEvents = filteredEvents.length > 0 ? filteredEvents : events;
 
@@ -177,6 +216,10 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
             <div className="panel-badge">深さ30km以下 {metrics.shallowCount}件</div>
           </div>
 
+          <div className={`magnitude-badge magnitude-badge-${selectedMagnitudeTone}`}>
+            Global standard: {selectedMagnitudeDisplay?.displayLabel ?? "Unknown"}
+          </div>
+
           <div className="map-frame">
             {!googleMapsApiKey && (
               <div className="map-fallback" role="status" aria-live="polite">
@@ -203,20 +246,22 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
               <GoogleMap
                 mapContainerClassName="map-canvas"
                 center={mapCenter}
-                zoom={selectedEvent.magnitude >= 6 ? 5.8 : 5.2}
+                zoom={mapZoom}
                 options={mapOptions}
               >
                 {filteredEvents.map((event) => {
+                  const display = magnitudeDisplay(event.magnitude);
                   const tone = magnitudeTone(event.magnitude);
                   const highlighted = event.id === selectedEvent.id;
+                  const markerIcon = createMagnitudeMarkerIcon(event.magnitude);
 
                   return (
                     <MarkerF
                       key={event.id}
                       position={{ lat: event.latitude, lng: event.longitude }}
-                      icon={markerIconByTone[tone]}
+                      icon={markerIcon}
                       zIndex={highlighted ? 120 : 80}
-                      title={`${event.place} M${event.magnitude.toFixed(1)} ${event.intensityLabel}`}
+                      title={`${event.place} ${display.displayLabel} ${event.intensityLabel}`}
                       onClick={() => setSelectedId(event.id)}
                     />
                   );
@@ -226,9 +271,16 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
           </div>
 
           <div className="legend-row">
-            <span><i className="legend-dot danger" />M6.0以上</span>
-            <span><i className="legend-dot warning" />M5.0以上</span>
-            <span><i className="legend-dot calm" />M5.0未満</span>
+            {magnitudeBands.map((band) => {
+              const tone = bandToneForBand(band.band);
+
+              return (
+                <span key={band.band}>
+                  <i className={`legend-dot ${tone}`} />
+                  {band.label} {band.range}
+                </span>
+              );
+            })}
           </div>
         </article>
 
@@ -251,7 +303,7 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
               </div>
               <div>
                 <dt>規模</dt>
-                <dd>M{selectedEvent.magnitude.toFixed(1)}</dd>
+                <dd>{selectedMagnitudeDisplay?.displayLabel ?? `M${selectedEvent.magnitude.toFixed(1)}`}</dd>
               </div>
               <div>
                 <dt>深さ</dt>
@@ -260,6 +312,10 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
               <div>
                 <dt>震度</dt>
                 <dd>{selectedEvent.intensityLabel}</dd>
+              </div>
+              <div>
+                <dt>表示形式</dt>
+                <dd>{selectedMagnitudeDisplay?.label ?? "Unknown"}</dd>
               </div>
               <div>
                 <dt>座標</dt>
@@ -341,7 +397,7 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
                 </div>
 
                 <div className="event-meta">
-                  <span>M{event.magnitude.toFixed(1)}</span>
+                  <span>{magnitudeDisplay(event.magnitude).displayLabel}</span>
                   <span>{event.depthKm}km</span>
                   <span>{event.intensityLabel}</span>
                 </div>
@@ -362,6 +418,57 @@ function inHourRange(issuedAt: string, minHour: number, maxHour: number) {
   const hour = Number(time.split(":")[0]);
 
   return Number.isFinite(hour) && hour >= minHour && hour <= maxHour;
+}
+
+function getMapZoom(magnitude: number) {
+  if (magnitude >= 7) {
+    return 4.5;
+  }
+
+  if (magnitude >= 6) {
+    return 5.1;
+  }
+
+  if (magnitude >= 5) {
+    return 5.7;
+  }
+
+  if (magnitude >= 4) {
+    return 6.2;
+  }
+
+  return 6.8;
+}
+
+function bandToneForBand(band: (typeof magnitudeBandOrder)[number]) {
+  if (band === "major" || band === "great") {
+    return "danger" as const;
+  }
+
+  if (band === "moderate" || band === "strong") {
+    return "warning" as const;
+  }
+
+  return "calm" as const;
+}
+
+function createMagnitudeMarkerIcon(magnitude: number): google.maps.Icon {
+  const display = magnitudeDisplay(magnitude);
+  const size = bandSizeByMagnitude[display.band];
+  const color = bandColorByTone[display.tone];
+
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 48 48" fill="none">
+      <circle cx="24" cy="24" r="18" fill="${color}" fill-opacity="0.2" stroke="${color}" stroke-width="3" />
+      <circle cx="24" cy="24" r="7" fill="${color}" />
+    </svg>
+  `;
+
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: new google.maps.Size(size, size),
+    anchor: new google.maps.Point(size / 2, size / 2)
+  };
 }
 
 function ChartCard({

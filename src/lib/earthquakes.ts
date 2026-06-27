@@ -13,6 +13,25 @@ export type EarthquakeEvent = {
   summary: string;
 };
 
+export type MagnitudeBand = "micro" | "minor" | "light" | "moderate" | "strong" | "major" | "great";
+
+const magnitudeBandDefinitions: Array<{
+  band: MagnitudeBand;
+  min: number;
+  max: number;
+  label: string;
+  range: string;
+  tone: "calm" | "warning" | "danger";
+}> = [
+  { band: "micro", min: 0, max: 2, label: "Micro", range: "M0.0-1.9", tone: "calm" },
+  { band: "minor", min: 2, max: 4, label: "Minor", range: "M2.0-3.9", tone: "calm" },
+  { band: "light", min: 4, max: 5, label: "Light", range: "M4.0-4.9", tone: "calm" },
+  { band: "moderate", min: 5, max: 6, label: "Moderate", range: "M5.0-5.9", tone: "warning" },
+  { band: "strong", min: 6, max: 7, label: "Strong", range: "M6.0-6.9", tone: "warning" },
+  { band: "major", min: 7, max: 8, label: "Major", range: "M7.0-7.9", tone: "danger" },
+  { band: "great", min: 8, max: Number.POSITIVE_INFINITY, label: "Great", range: "M8.0+", tone: "danger" }
+];
+
 export const earthquakeEvents: EarthquakeEvent[] = [
   {
     id: "eq-001",
@@ -134,11 +153,35 @@ export function projectToMap(latitude: number, longitude: number) {
 }
 
 export function magnitudeTone(magnitude: number) {
-  if (magnitude >= 6.0) {
+  const classification = classifyMagnitude(magnitude);
+
+  return classification.tone;
+}
+
+export function classifyMagnitude(magnitude: number) {
+  return (
+    magnitudeBandDefinitions.find((definition) => magnitude >= definition.min && magnitude < definition.max) ??
+    magnitudeBandDefinitions[0]
+  );
+}
+
+export function magnitudeDisplay(magnitude: number) {
+  const classification = classifyMagnitude(magnitude);
+
+  return {
+    ...classification,
+    displayLabel: `${classification.label} (${classification.range})`
+  };
+}
+
+export function magnitudePresentation(magnitude: number) {
+  const classification = classifyMagnitude(magnitude);
+
+  if (classification.band === "major" || classification.band === "great") {
     return "danger";
   }
 
-  if (magnitude >= 5.0) {
+  if (classification.band === "moderate" || classification.band === "strong") {
     return "warning";
   }
 
