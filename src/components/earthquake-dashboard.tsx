@@ -62,6 +62,8 @@ const bandSizeByMagnitude: Record<(typeof magnitudeBandOrder)[number], number> =
 export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
   const [minimumMagnitude, setMinimumMagnitude] = useState(4.5);
   const [selectedId, setSelectedId] = useState(() => sortByRecency(events)[0]?.id ?? "");
+  const [shouldShowIntensityOnMap, setShouldShowIntensityOnMap] = useState(false);
+  const [shouldFocusSingleLocation, setShouldFocusSingleLocation] = useState(false);
   const { isLoaded, loadError } = useJsApiLoader({
     id: "earthquake-google-map",
     googleMapsApiKey,
@@ -114,6 +116,13 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
   );
 
   const chartEvents = effectiveEvents;
+  const mapEvents = shouldFocusSingleLocation && selectedEvent ? [selectedEvent] : effectiveEvents;
+
+  const selectEvent = (eventId: string) => {
+    setSelectedId(eventId);
+    setShouldShowIntensityOnMap(true);
+    setShouldFocusSingleLocation(true);
+  };
 
   const timeBands = useMemo(() => {
     return [
@@ -231,6 +240,8 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
             Global standard: {selectedMagnitudeDisplay?.displayLabel ?? "Unknown"}
           </div>
 
+          <p className="panel-note">地点を選択すると、各地点の震度ラベルを地図に表示します。</p>
+
           <div className="map-frame">
             {!googleMapsApiKey && (
               <div className="map-fallback" role="status" aria-live="polite">
@@ -260,20 +271,31 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
                 zoom={mapZoom}
                 options={mapOptions}
               >
-                {effectiveEvents.map((event) => {
+                {mapEvents.map((event) => {
                   const display = magnitudeDisplay(event.magnitude);
                   const tone = magnitudeTone(event.magnitude);
                   const highlighted = event.id === selectedEvent.id;
                   const markerIcon = createMagnitudeMarkerIcon(event.magnitude);
+                  const intensityText = mapIntensityLabel(event.intensityLabel);
+                  const intensityColor = mapIntensityLabelColor(event.intensityLabel);
+                  const markerLabel = shouldShowIntensityOnMap
+                    ? {
+                        text: intensityText,
+                        color: intensityColor,
+                        fontWeight: "700",
+                        fontSize: "12px"
+                      }
+                    : undefined;
 
                   return (
                     <MarkerF
                       key={event.id}
                       position={{ lat: event.latitude, lng: event.longitude }}
                       icon={markerIcon}
+                      label={markerLabel}
                       zIndex={highlighted ? 120 : 80}
                       title={`${event.place} ${display.displayLabel} ${event.intensityLabel}`}
-                      onClick={() => setSelectedId(event.id)}
+                      onClick={() => selectEvent(event.id)}
                     />
                   );
                 })}
@@ -436,7 +458,7 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
                     key={event.id}
                     type="button"
                     className={isActive ? "event-card event-card-active" : "event-card"}
-                    onClick={() => setSelectedId(event.id)}
+                    onClick={() => selectEvent(event.id)}
                   >
                     <div className="event-head">
                       <div>
@@ -519,8 +541,31 @@ function createMagnitudeMarkerIcon(magnitude: number): google.maps.Icon {
   return {
     url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
     scaledSize: new google.maps.Size(size, size),
-    anchor: new google.maps.Point(size / 2, size / 2)
+    anchor: new google.maps.Point(size / 2, size / 2),
+    labelOrigin: new google.maps.Point(size / 2, size + 6)
   };
+}
+
+function mapIntensityLabel(intensityLabel: string) {
+  return intensityLabel.replace("震度", "").trim() || "?";
+}
+
+function mapIntensityLabelColor(intensityLabel: string) {
+  const normalized = mapIntensityLabel(intensityLabel).replaceAll("＋", "+").replaceAll("－", "-");
+
+  if (normalized === "7") {
+    return "#ff2f2f";
+  }
+
+  if (normalized.startsWith("6") || normalized.startsWith("5") || normalized.includes("強")) {
+    return "#ff8a3c";
+  }
+
+  if (normalized.startsWith("4")) {
+    return "#ffd982";
+  }
+
+  return "#8ce7ff";
 }
 
 function ChartCard({
