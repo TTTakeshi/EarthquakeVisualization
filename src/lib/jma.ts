@@ -17,7 +17,7 @@ type JmaListEntry = {
 };
 
 const JMA_LIST_URL = "https://www.jma.go.jp/bosai/quake/data/list.json";
-const MAX_EVENTS = 6;
+const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 
 export async function getEarthquakeEvents(): Promise<EarthquakeEvent[]> {
   try {
@@ -56,9 +56,31 @@ function normalizeJmaEarthquakes(items: JmaListEntry[]): EarthquakeEvent[] {
   const preferred = Array.from(grouped.values())
     .map(selectBestRecord)
     .filter((item): item is JmaListEntry => Boolean(item?.mag && item?.anm))
-    .slice(0, MAX_EVENTS);
+    .filter((item) => isWithinPastYear(item));
 
   return preferred.map((item, index) => convertRecordToEvent(item, index));
+}
+
+function isWithinPastYear(record: JmaListEntry) {
+  const issuedAt = parseIssuedDate(record);
+
+  if (!issuedAt) {
+    return false;
+  }
+
+  return Date.now() - issuedAt.getTime() <= ONE_YEAR_MS;
+}
+
+function parseIssuedDate(record: JmaListEntry) {
+  const raw = record.at ?? record.rdt;
+
+  if (!raw) {
+    return undefined;
+  }
+
+  const parsed = new Date(raw);
+
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 }
 
 function selectBestRecord(records: JmaListEntry[]) {
