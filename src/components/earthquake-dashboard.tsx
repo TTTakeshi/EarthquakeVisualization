@@ -61,7 +61,7 @@ const bandSizeByMagnitude: Record<(typeof magnitudeBandOrder)[number], number> =
 
 export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
   const [minimumMagnitude, setMinimumMagnitude] = useState(4.5);
-  const [selectedId, setSelectedId] = useState(events[0]?.id ?? "");
+  const [selectedId, setSelectedId] = useState(() => sortByRecency(events)[0]?.id ?? "");
   const { isLoaded, loadError } = useJsApiLoader({
     id: "earthquake-google-map",
     googleMapsApiKey,
@@ -73,11 +73,15 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
     return sortByRecency(events).filter((event) => event.magnitude >= minimumMagnitude);
   }, [events, minimumMagnitude]);
 
-  const selectedEvent = filteredEvents.find((event) => event.id === selectedId) ?? filteredEvents[0] ?? events[0];
-  const metrics = computeMetrics(filteredEvents.length > 0 ? filteredEvents : events);
+  const effectiveEvents = filteredEvents.length > 0 ? filteredEvents : sortByRecency(events);
+  const isFilterFallback = filteredEvents.length === 0 && minimumMagnitude > 0;
+
+  const selectedEvent = effectiveEvents.find((event) => event.id === selectedId) ?? effectiveEvents[0] ?? events[0];
+  const metrics = computeMetrics(effectiveEvents);
   const selectedMagnitudeDisplay = selectedEvent ? magnitudeDisplay(selectedEvent.magnitude) : undefined;
   const selectedMagnitudeTone = selectedEvent ? magnitudeTone(selectedEvent.magnitude) : "calm";
-  const forecast = useMemo(() => buildEarthquakeForecast(filteredEvents.length > 0 ? filteredEvents : events), [filteredEvents, events]);
+  const forecast = useMemo(() => buildEarthquakeForecast(effectiveEvents), [effectiveEvents]);
+  const latestEvent = effectiveEvents[0];
 
   const mapCenter = useMemo(
     () => ({ lat: selectedEvent?.latitude ?? 36.2048, lng: selectedEvent?.longitude ?? 138.2529 }),
@@ -109,7 +113,7 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
     [events]
   );
 
-  const chartEvents = filteredEvents.length > 0 ? filteredEvents : events;
+  const chartEvents = effectiveEvents;
 
   const timeBands = useMemo(() => {
     return [
@@ -205,6 +209,11 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
           <StatCard label="観測件数" value={`${metrics.total}件`} detail="表示中の地震イベント" />
           <StatCard label="最大規模" value={`M${metrics.strongest.magnitude.toFixed(1)}`} detail={metrics.strongest.place} />
           <StatCard label="平均規模" value={`M${metrics.recentAverage}`} detail="表示範囲の平均" />
+          <StatCard
+            label="最新発生"
+            value={latestEvent ? latestEvent.issuedAt.split(" ")[1] : "--:--"}
+            detail={latestEvent ? latestEvent.place : "データなし"}
+          />
         </div>
       </section>
 
@@ -251,7 +260,7 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
                 zoom={mapZoom}
                 options={mapOptions}
               >
-                {filteredEvents.map((event) => {
+                {effectiveEvents.map((event) => {
                   const display = magnitudeDisplay(event.magnitude);
                   const tone = magnitudeTone(event.magnitude);
                   const highlighted = event.id === selectedEvent.id;
@@ -286,7 +295,7 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
           </div>
         </article>
 
-        <aside className="panel detail-panel">
+        <aside className="panel detail-panel sticky-panel">
           <div className="panel-header">
             <div>
               <span className="panel-kicker">event detail</span>
@@ -379,72 +388,78 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
         </aside>
       </section>
 
-      <section className="panel chart-panel">
-        <div className="panel-header">
-          <div>
-            <span className="panel-kicker">stats</span>
-            <h2>統計チャート</h2>
+      <section className="insight-grid">
+        <article className="panel chart-panel">
+          <div className="panel-header">
+            <div>
+              <span className="panel-kicker">stats</span>
+              <h2>統計チャート</h2>
+            </div>
+            <p className="panel-note">現在の表示条件で {chartEvents.length} 件を集計</p>
           </div>
-          <p className="panel-note">現在の表示条件で {chartEvents.length} 件を集計</p>
-        </div>
 
-        <div className="chart-grid">
-          <ChartCard title="時間帯別件数" description="発生時刻を6区分で集計">
-            <BarChart items={timeBands} tone="accent" />
-          </ChartCard>
+          <div className="chart-grid">
+            <ChartCard title="時間帯別件数" description="発生時刻を6区分で集計">
+              <BarChart items={timeBands} tone="accent" />
+            </ChartCard>
 
-          <ChartCard title="深さ分布" description="震源深さの偏りを確認">
-            <BarChart items={depthBands} tone="warning" />
-          </ChartCard>
+            <ChartCard title="深さ分布" description="震源深さの偏りを確認">
+              <BarChart items={depthBands} tone="warning" />
+            </ChartCard>
 
-          <ChartCard title="規模ヒストグラム" description="マグニチュード帯ごとの件数">
-            <BarChart items={magnitudeHistogram} tone="danger" />
-          </ChartCard>
-        </div>
-      </section>
-
-      <section className="panel list-panel">
-        <div className="panel-header">
-          <div>
-            <span className="panel-kicker">event stream</span>
-            <h2>最新イベント一覧</h2>
+            <ChartCard title="規模ヒストグラム" description="マグニチュード帯ごとの件数">
+              <BarChart items={magnitudeHistogram} tone="danger" />
+            </ChartCard>
           </div>
-          <p className="panel-note">
-            表示閾値は {minimumMagnitude === 0 ? "すべて" : `M${minimumMagnitude.toFixed(1)} 以上`}
-          </p>
-        </div>
+        </article>
 
-        <div className="list-grid">
-          {filteredEvents.map((event) => {
-            const isActive = event.id === selectedEvent.id;
+        <article className="panel list-panel">
+          <div className="panel-header">
+            <div>
+              <span className="panel-kicker">event stream</span>
+              <h2>最新イベント一覧</h2>
+            </div>
+            <p className="panel-note">
+              {isFilterFallback
+                ? `M${minimumMagnitude.toFixed(1)} 以上は該当なしのため全件表示`
+                : `表示閾値は ${minimumMagnitude === 0 ? "すべて" : `M${minimumMagnitude.toFixed(1)} 以上`}`}
+            </p>
+          </div>
 
-            return (
-              <button
-                key={event.id}
-                type="button"
-                className={isActive ? "event-card event-card-active" : "event-card"}
-                onClick={() => setSelectedId(event.id)}
-              >
-                <div className="event-head">
-                  <div>
-                    <span className="event-region">{event.region}</span>
-                    <h3>{event.place}</h3>
-                  </div>
-                  <span className={`status-pill status-${event.status}`}>{event.status}</span>
-                </div>
+          <div className="list-scroll">
+            <div className="list-grid">
+              {effectiveEvents.map((event) => {
+                const isActive = event.id === selectedEvent.id;
 
-                <div className="event-meta">
-                  <span>{magnitudeDisplay(event.magnitude).displayLabel}</span>
-                  <span>{event.depthKm}km</span>
-                  <span>{event.intensityLabel}</span>
-                </div>
+                return (
+                  <button
+                    key={event.id}
+                    type="button"
+                    className={isActive ? "event-card event-card-active" : "event-card"}
+                    onClick={() => setSelectedId(event.id)}
+                  >
+                    <div className="event-head">
+                      <div>
+                        <span className="event-region">{event.region}</span>
+                        <h3>{event.place}</h3>
+                      </div>
+                      <span className={`status-pill status-${event.status}`}>{event.status}</span>
+                    </div>
 
-                <p>{event.summary}</p>
-                <div className="event-time">{event.issuedAt}</div>
-              </button>
-            );
-          })}
-        </div>
+                    <div className="event-meta">
+                      <span>{magnitudeDisplay(event.magnitude).displayLabel}</span>
+                      <span>{event.depthKm}km</span>
+                      <span>{event.intensityLabel}</span>
+                    </div>
+
+                    <p>{event.summary}</p>
+                    <div className="event-time">{event.issuedAt}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </article>
       </section>
     </main>
   );
