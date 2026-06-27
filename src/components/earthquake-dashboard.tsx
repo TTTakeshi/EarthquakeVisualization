@@ -4,7 +4,13 @@ import { useMemo, useState } from "react";
 import { GoogleMap, MarkerF, useJsApiLoader } from "@react-google-maps/api";
 import { computeMetrics, magnitudeTone, sortByRecency, type EarthquakeEvent } from "@/lib/earthquakes";
 
-const focusLevels = [4.5, 5.0, 5.5, 6.0];
+const focusLevels = [
+  { value: 0, label: "すべて" },
+  { value: 4.5, label: "M4.5+" },
+  { value: 5.0, label: "M5.0+" },
+  { value: 5.5, label: "M5.5+" },
+  { value: 6.0, label: "M6.0+" }
+];
 const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
 
 const markerIconByTone: Record<ReturnType<typeof magnitudeTone>, string> = {
@@ -14,7 +20,7 @@ const markerIconByTone: Record<ReturnType<typeof magnitudeTone>, string> = {
 };
 
 export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
-  const [minimumMagnitude, setMinimumMagnitude] = useState(4.5);
+  const [minimumMagnitude, setMinimumMagnitude] = useState(0);
   const [selectedId, setSelectedId] = useState(events[0]?.id ?? "");
   const { isLoaded, loadError } = useJsApiLoader({
     id: "earthquake-google-map",
@@ -89,12 +95,12 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
           <div className="hero-actions">
             {focusLevels.map((level) => (
               <button
-                key={level}
+                key={level.value}
                 type="button"
-                className={level === minimumMagnitude ? "chip chip-active" : "chip"}
-                onClick={() => setMinimumMagnitude(level)}
+                className={level.value === minimumMagnitude ? "chip chip-active" : "chip"}
+                onClick={() => setMinimumMagnitude(level.value)}
               >
-                M{level.toFixed(1)}+
+                {level.label}
               </button>
             ))}
           </div>
@@ -232,7 +238,9 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
             <span className="panel-kicker">event stream</span>
             <h2>最新イベント一覧</h2>
           </div>
-          <p className="panel-note">表示閾値は M{minimumMagnitude.toFixed(1)} 以上</p>
+          <p className="panel-note">
+            表示閾値は {minimumMagnitude === 0 ? "すべて" : `M${minimumMagnitude.toFixed(1)} 以上`}
+          </p>
         </div>
 
         <div className="list-grid">
