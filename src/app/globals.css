@@ -272,7 +272,8 @@ button {
 .legend-dot.danger { background: var(--danger); }
 
 .detail-card,
-.timeline-card {
+.timeline-card,
+.forecast-card {
   padding: 18px;
 }
 
@@ -302,6 +303,97 @@ button {
   margin: 8px 0 16px;
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+.forecast-card {
+  display: grid;
+  gap: 14px;
+}
+
+.forecast-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.forecast-head h3 {
+  margin: 6px 0 0;
+  font-size: 1.03rem;
+}
+
+.forecast-pill {
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  border: 1px solid rgba(141, 174, 201, 0.16);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.forecast-pill-low {
+  color: var(--accent);
+}
+
+.forecast-pill-elevated {
+  color: var(--warning);
+}
+
+.forecast-pill-high {
+  color: var(--danger);
+}
+
+.forecast-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.forecast-grid {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.forecast-grid div {
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(141, 174, 201, 0.08);
+}
+
+.forecast-grid dt {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-bottom: 6px;
+}
+
+.forecast-grid dd {
+  margin: 0;
+  font-weight: 700;
+}
+
+.forecast-signals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.forecast-signals span {
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(141, 174, 201, 0.08);
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.forecast-advice {
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: linear-gradient(90deg, rgba(91, 231, 213, 0.1), rgba(255, 179, 92, 0.08));
+  border: 1px solid rgba(91, 231, 213, 0.12);
+  color: var(--text);
 }
 
 .chart-list {

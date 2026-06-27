@@ -3,6 +3,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { GoogleMap, MarkerF, useJsApiLoader } from "@react-google-maps/api";
 import {
+  buildEarthquakeForecast,
   classifyMagnitude,
   computeMetrics,
   magnitudeDisplay,
@@ -59,7 +60,7 @@ const bandSizeByMagnitude: Record<(typeof magnitudeBandOrder)[number], number> =
 };
 
 export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
-  const [minimumMagnitude, setMinimumMagnitude] = useState(0);
+  const [minimumMagnitude, setMinimumMagnitude] = useState(4.5);
   const [selectedId, setSelectedId] = useState(events[0]?.id ?? "");
   const { isLoaded, loadError } = useJsApiLoader({
     id: "earthquake-google-map",
@@ -76,6 +77,7 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
   const metrics = computeMetrics(filteredEvents.length > 0 ? filteredEvents : events);
   const selectedMagnitudeDisplay = selectedEvent ? magnitudeDisplay(selectedEvent.magnitude) : undefined;
   const selectedMagnitudeTone = selectedEvent ? magnitudeTone(selectedEvent.magnitude) : "calm";
+  const forecast = useMemo(() => buildEarthquakeForecast(filteredEvents.length > 0 ? filteredEvents : events), [filteredEvents, events]);
 
   const mapCenter = useMemo(
     () => ({ lat: selectedEvent?.latitude ?? 36.2048, lng: selectedEvent?.longitude ?? 138.2529 }),
@@ -338,6 +340,41 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
                 </div>
               ))}
             </div>
+          </div>
+
+          <div className="forecast-card">
+            <div className="forecast-head">
+              <div>
+                <span className="panel-kicker">forecast</span>
+                <h3>地震傾向の参考予想</h3>
+              </div>
+              <div className={`forecast-pill forecast-pill-${forecast.level}`}>{forecast.label}</div>
+            </div>
+
+            <p>{forecast.summary}</p>
+
+            <dl className="forecast-grid">
+              <div>
+                <dt>想定規模帯</dt>
+                <dd>{forecast.expectedMagnitudeRange}</dd>
+              </div>
+              <div>
+                <dt>想定深さ帯</dt>
+                <dd>{forecast.expectedDepthRange}</dd>
+              </div>
+              <div>
+                <dt>信頼度</dt>
+                <dd>{forecast.confidence}</dd>
+              </div>
+            </dl>
+
+            <div className="forecast-signals">
+              {forecast.signals.map((signal) => (
+                <span key={signal}>{signal}</span>
+              ))}
+            </div>
+
+            <div className="forecast-advice">{forecast.advice}</div>
           </div>
         </aside>
       </section>

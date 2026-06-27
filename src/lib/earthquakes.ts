@@ -13,6 +13,19 @@ export type EarthquakeEvent = {
   summary: string;
 };
 
+export type EarthquakeForecastLevel = "low" | "elevated" | "high";
+
+export type EarthquakeForecast = {
+  level: EarthquakeForecastLevel;
+  label: string;
+  summary: string;
+  confidence: string;
+  expectedMagnitudeRange: string;
+  expectedDepthRange: string;
+  signals: string[];
+  advice: string;
+};
+
 export type MagnitudeBand = "micro" | "minor" | "light" | "moderate" | "strong" | "major" | "great";
 
 const magnitudeBandDefinitions: Array<{
@@ -203,4 +216,114 @@ export function computeMetrics(events: EarthquakeEvent[]) {
     recentAverage: recentAverage.toFixed(1),
     shallowCount
   };
+}
+
+export function buildEarthquakeForecast(events: EarthquakeEvent[]): EarthquakeForecast {
+  if (events.length === 0) {
+    return {
+      level: "low",
+      label: "静穏",
+      summary: "有効な地震イベントがないため、予想指標は算出できません。",
+      confidence: "データ不足",
+      expectedMagnitudeRange: "M0.0-0.0",
+      expectedDepthRange: "0-0km",
+      signals: ["イベントが未取得です"],
+      advice: "データ取得後に再計算されます。"
+    };
+  }
+
+  const sorted = sortByRecency(events);
+  const sample = sorted.slice(0, Math.min(sorted.length, 6));
+  const strongest = [...sample].sort((left, right) => right.magnitude - left.magnitude)[0] ?? sample[0];
+  const averageMagnitude = sample.reduce((sum, event) => sum + event.magnitude, 0) / sample.length;
+  const averageDepth = sample.reduce((sum, event) => sum + event.depthKm, 0) / sample.length;
+  const shallowRatio = sample.filter((event) => event.depthKm <= 30).length / sample.length;
+  const strongRatio = sample.filter((event) => event.magnitude >= 5.5).length / sample.length;
+  const spreadHours = getSpreadHours(sample);
+  const densityScore = Math.max(0, 24 - Math.min(24, spreadHours));
+
+  const score = Math.round(
+    Math.min(
+      100,
+      averageMagnitude * 11 + shallowRatio * 24 + strongRatio * 28 + densityScore * 1.2 + strongest.magnitude * 2
+    )
+  );
+
+  const level: EarthquakeForecastLevel = score >= 68 ? "high" : score >= 42 ? "elevated" : "low";
+
+  const labels: Record<EarthquakeForecastLevel, string> = {
+    low: "静穏",
+    elevated: "注意",
+    high: "警戒"
+  };
+
+  const summaries: Record<EarthquakeForecastLevel, string> = {
+    low: "現状は比較的落ち着いた推移です。小さめの揺れが続く場合は、周辺の動きだけ継続監視してください。",
+    elevated:
+      "M5級の地震や浅い震源が見られます。局地的に揺れが強まる可能性があるため、沿岸部と古い建物に注意してください。",
+    high:
+      "大きめの地震か、浅い震源が連続しています。余震や広い範囲の揺れを想定し、強い揺れへの備えを優先してください。"
+  };
+
+  const advice: Record<EarthquakeForecastLevel, string> = {
+    low: "情報更新を追いながら、避難経路と備蓄の確認をしておくと安心です。",
+    elevated: "家具固定、充電、海沿いの移動計画を再確認してください。",
+    high: "揺れの強い可能性を前提に、家族・職場で行動基準を共有してください。"
+  };
+
+  return {
+    level,
+    label: labels[level],
+    summary: summaries[level],
+    confidence: `${score}%の参考指標`,
+    expectedMagnitudeRange: formatMagnitudeRange(averageMagnitude, strongest.magnitude),
+    expectedDepthRange: formatDepthRange(averageDepth),
+    signals: [
+      averageMagnitude >= 5 ? "M5級以上が中心" : "M4台中心",
+      shallowRatio >= 0.5 ? "浅い震源が多い" : "深さは中間帯が中心",
+      strongRatio >= 0.34 ? "M5.5以上が混在" : "大きな規模は限定的",
+      spreadHours <= 8 ? "短時間に発生が集中" : "発生間隔は比較的ゆるやか"
+    ],
+    advice: advice[level]
+  };
+}
+
+function formatMagnitudeRange(averageMagnitude: number, strongestMagnitude: number) {
+  const min = Math.max(3, averageMagnitude - 0.4).toFixed(1);
+  const max = Math.min(8.5, strongestMagnitude + 0.5).toFixed(1);
+
+  return `M${min}-${max}`;
+}
+
+function formatDepthRange(averageDepth: number) {
+  const min = Math.max(0, Math.round(Math.min(averageDepth, 40) - 8));
+  const max = Math.round(Math.min(averageDepth + 12, 120));
+
+  return `${min}-${max}km`;
+}
+
+function getSpreadHours(events: EarthquakeEvent[]) {
+  if (events.length < 2) {
+    return 0;
+  }
+
+  const times = events
+    .map((event) => parseIssuedAt(event.issuedAt))
+    .filter((time): time is number => Number.isFinite(time) && time > 0);
+
+  if (times.length < 2) {
+    return 0;
+  }
+
+  const latest = Math.max(...times);
+  const earliest = Math.min(...times);
+
+  return Math.max(0, (latest - earliest) / 1000 / 60 / 60);
+}
+
+function parseIssuedAt(issuedAt: string) {
+  const normalized = issuedAt.replace(" ", "T");
+  const parsed = Date.parse(`${normalized}:00+09:00`);
+
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
 }
