@@ -9,6 +9,7 @@ export type EarthquakeEvent = {
   latitude: number;
   longitude: number;
   source: string;
+  detailJson?: string;
   status: "速報" | "更新" | "確定";
   summary: string;
 };

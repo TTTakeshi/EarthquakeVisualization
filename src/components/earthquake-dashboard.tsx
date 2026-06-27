@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { GoogleMap, MarkerF, useJsApiLoader } from "@react-google-maps/api";
 import {
   buildEarthquakeForecast,
@@ -50,13 +50,21 @@ const bandColorByTone: Record<ReturnType<typeof magnitudeTone>, string> = {
 };
 
 const bandSizeByMagnitude: Record<(typeof magnitudeBandOrder)[number], number> = {
-  micro: 18,
-  minor: 20,
-  light: 24,
-  moderate: 30,
-  strong: 36,
-  major: 42,
-  great: 48
+  micro: 26,
+  minor: 28,
+  light: 32,
+  moderate: 38,
+  strong: 44,
+  major: 50,
+  great: 56
+};
+
+type MapIntensityPoint = {
+  id: string;
+  name: string;
+  intensityLabel: string;
+  latitude: number;
+  longitude: number;
 };
 
 export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
@@ -64,6 +72,10 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
   const [selectedId, setSelectedId] = useState(() => sortByRecency(events)[0]?.id ?? "");
   const [shouldShowIntensityOnMap, setShouldShowIntensityOnMap] = useState(false);
   const [shouldFocusSingleLocation, setShouldFocusSingleLocation] = useState(false);
+  const [nearbyIntensityPoints, setNearbyIntensityPoints] = useState<MapIntensityPoint[]>([]);
+  const [showAllNearbyLabels, setShowAllNearbyLabels] = useState(false);
+  const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
+  const [currentMapZoom, setCurrentMapZoom] = useState<number | null>(null);
   const { isLoaded, loadError } = useJsApiLoader({
     id: "earthquake-google-map",
     googleMapsApiKey,
@@ -91,6 +103,7 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
   );
 
   const mapZoom = useMemo(() => getMapZoom(selectedEvent?.magnitude ?? 0), [selectedEvent?.magnitude]);
+  const zoomScale = useMemo(() => getZoomScale(currentMapZoom ?? mapZoom), [currentMapZoom, mapZoom]);
 
   const mapOptions = useMemo(
     () => ({
@@ -117,11 +130,69 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
 
   const chartEvents = effectiveEvents;
   const mapEvents = shouldFocusSingleLocation && selectedEvent ? [selectedEvent] : effectiveEvents;
+  const visibleNearbyPoints = useMemo(() => {
+    if (!shouldFocusSingleLocation || !selectedEvent) {
+      return [] as MapIntensityPoint[];
+    }
+
+    const prioritized = nearbyIntensityPoints
+      .map((point) => ({
+        point,
+        rank: intensityRank(point.intensityLabel),
+        distanceKm: distanceKm(selectedEvent.latitude, selectedEvent.longitude, point.latitude, point.longitude)
+      }))
+      .sort((left, right) => right.rank - left.rank || left.distanceKm - right.distanceKm);
+
+    return prioritized.map((entry) => entry.point);
+  }, [nearbyIntensityPoints, selectedEvent, shouldFocusSingleLocation]);
+
+  useEffect(() => {
+    if (!shouldFocusSingleLocation || !selectedEvent?.detailJson) {
+      setNearbyIntensityPoints([]);
+
+      return;
+    }
+
+    setNearbyIntensityPoints([]);
+
+    let cancelled = false;
+
+    const loadNearbyIntensity = async () => {
+      try {
+        const response = await fetch(`/api/earthquake-intensity?detail=${encodeURIComponent(selectedEvent.detailJson ?? "")}`);
+
+        if (!response.ok) {
+          if (!cancelled) {
+            setNearbyIntensityPoints([]);
+          }
+
+          return;
+        }
+
+        const payload = (await response.json()) as { points?: MapIntensityPoint[] };
+
+        if (!cancelled) {
+          setNearbyIntensityPoints(payload.points ?? []);
+        }
+      } catch {
+        if (!cancelled) {
+          setNearbyIntensityPoints([]);
+        }
+      }
+    };
+
+    loadNearbyIntensity();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedEvent?.detailJson, shouldFocusSingleLocation]);
 
   const selectEvent = (eventId: string) => {
     setSelectedId(eventId);
     setShouldShowIntensityOnMap(true);
     setShouldFocusSingleLocation(true);
+    setNearbyIntensityPoints([]);
   };
 
   const timeBands = useMemo(() => {
@@ -240,7 +311,22 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
             Global standard: {selectedMagnitudeDisplay?.displayLabel ?? "Unknown"}
           </div>
 
-          <p className="panel-note">地点を選択すると、各地点の震度ラベルを地図に表示します。</p>
+          <p className="panel-note">
+            地点を選択すると、震源地にフォーカスし周辺観測点の震度を表示します。
+            {shouldFocusSingleLocation && `（表示 ${visibleNearbyPoints.length} / 取得 ${nearbyIntensityPoints.length} 件）`}
+          </p>
+
+          {shouldFocusSingleLocation && nearbyIntensityPoints.length > 0 && (
+            <div className="hero-actions" style={{ marginTop: 0, marginBottom: 10 }}>
+              <button
+                type="button"
+                className={showAllNearbyLabels ? "chip chip-active" : "chip"}
+                onClick={() => setShowAllNearbyLabels((current) => !current)}
+              >
+                {showAllNearbyLabels ? "周辺ラベルを簡易表示" : "周辺ラベルを全表示"}
+              </button>
+            </div>
+          )}
 
           <div className="map-frame">
             {!googleMapsApiKey && (
@@ -270,12 +356,22 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
                 center={mapCenter}
                 zoom={mapZoom}
                 options={mapOptions}
+                onLoad={(map) => {
+                  setMapInstance(map);
+                  setCurrentMapZoom(map.getZoom() ?? mapZoom);
+                }}
+                onZoomChanged={() => {
+                  const nextZoom = mapInstance?.getZoom();
+
+                  if (typeof nextZoom === "number") {
+                    setCurrentMapZoom(nextZoom);
+                  }
+                }}
               >
                 {mapEvents.map((event) => {
                   const display = magnitudeDisplay(event.magnitude);
-                  const tone = magnitudeTone(event.magnitude);
                   const highlighted = event.id === selectedEvent.id;
-                  const markerIcon = createMagnitudeMarkerIcon(event.magnitude);
+                  const markerIcon = createMagnitudeMarkerIcon(event.magnitude, zoomScale);
                   const intensityText = mapIntensityLabel(event.intensityLabel);
                   const intensityColor = mapIntensityLabelColor(event.intensityLabel);
                   const markerLabel = shouldShowIntensityOnMap
@@ -283,7 +379,7 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
                         text: intensityText,
                         color: intensityColor,
                         fontWeight: "700",
-                        fontSize: "12px"
+                        fontSize: `${Math.round(16 * zoomScale)}px`
                       }
                     : undefined;
 
@@ -299,6 +395,32 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
                     />
                   );
                 })}
+
+                {shouldFocusSingleLocation &&
+                  visibleNearbyPoints.map((point, index) => {
+                    const rank = intensityRank(point.intensityLabel);
+                    const shouldShowLabel = showAllNearbyLabels || rank >= 3 || index < 8;
+
+                    return (
+                    <MarkerF
+                      key={point.id}
+                      position={{ lat: point.latitude, lng: point.longitude }}
+                      icon={createObservationMarkerIcon(zoomScale)}
+                      label={
+                        shouldShowLabel
+                          ? {
+                              text: mapIntensityLabel(point.intensityLabel),
+                              color: mapIntensityLabelColor(point.intensityLabel),
+                              fontWeight: "700",
+                              fontSize: `${Math.round(15 * zoomScale)}px`
+                            }
+                          : undefined
+                      }
+                      zIndex={60}
+                      title={`${point.name} ${point.intensityLabel}`}
+                    />
+                    );
+                  })}
               </GoogleMap>
             )}
           </div>
@@ -526,9 +648,9 @@ function bandToneForBand(band: (typeof magnitudeBandOrder)[number]) {
   return "calm" as const;
 }
 
-function createMagnitudeMarkerIcon(magnitude: number): google.maps.Icon {
+function createMagnitudeMarkerIcon(magnitude: number, zoomScale: number): google.maps.Icon {
   const display = magnitudeDisplay(magnitude);
-  const size = bandSizeByMagnitude[display.band];
+  const size = Math.round(bandSizeByMagnitude[display.band] * zoomScale);
   const color = bandColorByTone[display.tone];
 
   const svg = `
@@ -543,6 +665,25 @@ function createMagnitudeMarkerIcon(magnitude: number): google.maps.Icon {
     scaledSize: new google.maps.Size(size, size),
     anchor: new google.maps.Point(size / 2, size / 2),
     labelOrigin: new google.maps.Point(size / 2, size + 6)
+  };
+}
+
+function createObservationMarkerIcon(zoomScale: number): google.maps.Icon {
+  const size = Math.round(24 * zoomScale);
+  const color = "#8fa3b8";
+
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="7" fill="${color}" fill-opacity="0.22" stroke="${color}" stroke-width="2" />
+      <circle cx="12" cy="12" r="3" fill="${color}" />
+    </svg>
+  `;
+
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: new google.maps.Size(size, size),
+    anchor: new google.maps.Point(size / 2, size / 2),
+    labelOrigin: new google.maps.Point(size / 2, size + 8)
   };
 }
 
@@ -566,6 +707,67 @@ function mapIntensityLabelColor(intensityLabel: string) {
   }
 
   return "#8ce7ff";
+}
+
+function intensityRank(intensityLabel: string) {
+  const normalized = mapIntensityLabel(intensityLabel).replaceAll("＋", "+").replaceAll("－", "-");
+
+  if (normalized === "7") {
+    return 7;
+  }
+
+  if (normalized.startsWith("6") && normalized.includes("強")) {
+    return 6.8;
+  }
+
+  if (normalized.startsWith("6")) {
+    return 6.2;
+  }
+
+  if (normalized.startsWith("5") && normalized.includes("強")) {
+    return 5.8;
+  }
+
+  if (normalized.startsWith("5")) {
+    return 5.2;
+  }
+
+  if (normalized.startsWith("4")) {
+    return 4;
+  }
+
+  if (normalized.startsWith("3")) {
+    return 3;
+  }
+
+  if (normalized.startsWith("2")) {
+    return 2;
+  }
+
+  if (normalized.startsWith("1")) {
+    return 1;
+  }
+
+  return 0;
+}
+
+function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const earthRadiusKm = 6371;
+  const lat1Rad = toRadians(lat1);
+  const lat2Rad = toRadians(lat2);
+  const latDelta = toRadians(lat2 - lat1);
+  const lonDelta = toRadians(lon2 - lon1);
+
+  const a =
+    Math.sin(latDelta / 2) * Math.sin(latDelta / 2) +
+    Math.cos(lat1Rad) * Math.cos(lat2Rad) * Math.sin(lonDelta / 2) * Math.sin(lonDelta / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return earthRadiusKm * c;
+}
+
+function toRadians(value: number) {
+  return (value * Math.PI) / 180;
 }
 
 function ChartCard({
@@ -633,4 +835,11 @@ function StatCard({
       <p>{detail}</p>
     </div>
   );
+}
+
+function getZoomScale(zoom: number) {
+  const baseline = 6;
+  const raw = 1 + (zoom - baseline) * 0.24;
+
+  return Math.max(0.85, Math.min(2.8, raw));
 }

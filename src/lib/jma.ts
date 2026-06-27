@@ -110,6 +110,7 @@ function convertRecordToEvent(record: JmaListEntry, index: number): EarthquakeEv
     latitude: coordinates.latitude ?? 0,
     longitude: coordinates.longitude ?? 0,
     source: record.ttl ?? record.en_ttl ?? "気象庁API",
+    detailJson: record.json,
     status,
     summary: buildSummary(record)
   };
