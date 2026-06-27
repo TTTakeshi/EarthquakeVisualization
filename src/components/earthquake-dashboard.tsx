@@ -1,33 +1,27 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { geoMercator, geoPath, type GeoProjection } from "d3-geo";
-import { feature } from "topojson-client";
-import japanTopology from "world-atlas/countries-110m.json";
-import { computeMetrics, magnitudeTone, projectToMap, sortByRecency, type EarthquakeEvent } from "@/lib/earthquakes";
+import { GoogleMap, MarkerF, useJsApiLoader } from "@react-google-maps/api";
+import { computeMetrics, magnitudeTone, sortByRecency, type EarthquakeEvent } from "@/lib/earthquakes";
 
 const focusLevels = [4.5, 5.0, 5.5, 6.0];
+const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
+
+const markerIconByTone: Record<ReturnType<typeof magnitudeTone>, string> = {
+  calm: "https://maps.google.com/mapfiles/ms/icons/ltblue-dot.png",
+  warning: "https://maps.google.com/mapfiles/ms/icons/orange-dot.png",
+  danger: "https://maps.google.com/mapfiles/ms/icons/red-dot.png"
+};
 
 export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
   const [minimumMagnitude, setMinimumMagnitude] = useState(4.5);
   const [selectedId, setSelectedId] = useState(events[0]?.id ?? "");
-
-  const japanMap = useMemo(() => {
-    const japanGeometry = (japanTopology as any).objects.countries.geometries.find(
-      (geometry: { id?: string | number }) => String(geometry.id) === "392"
-    );
-    const japanFeature = feature(japanTopology as any, japanGeometry as any) as GeoJSON.Feature<GeoJSON.Geometry>;
-    const projection = geoMercator().fitExtent(
-      [
-        [8, 8],
-        [92, 92]
-      ],
-      japanFeature
-    );
-    const path = geoPath(projection);
-
-    return { projection, path, japanFeature };
-  }, []);
+  const { isLoaded, loadError } = useJsApiLoader({
+    id: "earthquake-google-map",
+    googleMapsApiKey,
+    language: "ja",
+    region: "JP"
+  });
 
   const filteredEvents = useMemo(() => {
     return sortByRecency(events).filter((event) => event.magnitude >= minimumMagnitude);
@@ -35,6 +29,23 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
 
   const selectedEvent = filteredEvents.find((event) => event.id === selectedId) ?? filteredEvents[0] ?? events[0];
   const metrics = computeMetrics(filteredEvents.length > 0 ? filteredEvents : events);
+
+  const mapCenter = useMemo(
+    () => ({ lat: selectedEvent?.latitude ?? 36.2048, lng: selectedEvent?.longitude ?? 138.2529 }),
+    [selectedEvent?.latitude, selectedEvent?.longitude]
+  );
+
+  const mapOptions = useMemo(
+    () => ({
+      disableDefaultUI: true,
+      zoomControl: true,
+      fullscreenControl: true,
+      mapTypeControl: true,
+      streetViewControl: false,
+      clickableIcons: false
+    }),
+    []
+  );
 
   const magnitudeBands = [
     {
@@ -107,47 +118,51 @@ export function EarthquakeDashboard({ events }: { events: EarthquakeEvent[] }) {
           </div>
 
           <div className="map-frame">
-            <svg viewBox="0 0 100 100" className="map-svg" aria-label="日本付近の地震マップ">
-              <defs>
-                <linearGradient id="ocean" x1="0%" x2="100%" y1="0%" y2="100%">
-                  <stop offset="0%" stopColor="rgba(14, 32, 55, 0.96)" />
-                  <stop offset="100%" stopColor="rgba(4, 14, 28, 0.98)" />
-                </linearGradient>
-              </defs>
+            {!googleMapsApiKey && (
+              <div className="map-fallback" role="status" aria-live="polite">
+                <h3>Google Maps API キーが未設定です</h3>
+                <p>.env.local に NEXT_PUBLIC_GOOGLE_MAPS_API_KEY を追加すると地図が表示されます。</p>
+              </div>
+            )}
 
-              <rect x="0" y="0" width="100" height="100" rx="6" fill="url(#ocean)" />
-              <path d={japanMap.path(japanMap.japanFeature) ?? ""} className="map-land" />
-              <path
-                d={japanMap.path(japanMap.japanFeature) ?? ""}
-                className="map-coastline"
-              />
+            {googleMapsApiKey && loadError && (
+              <div className="map-fallback" role="status" aria-live="polite">
+                <h3>Google Maps の読み込みに失敗しました</h3>
+                <p>API キー、リファラー制限、または Maps JavaScript API の有効化状態を確認してください。</p>
+              </div>
+            )}
 
-              <text x="16" y="18" className="map-label">北海道</text>
-              <text x="62" y="17" className="map-label">東北</text>
-              <text x="67" y="38" className="map-label">関東</text>
-              <text x="44" y="78" className="map-label">九州</text>
+            {googleMapsApiKey && !loadError && !isLoaded && (
+              <div className="map-fallback" role="status" aria-live="polite">
+                <h3>地図を読み込み中です</h3>
+                <p>Google Maps API への接続を待っています。</p>
+              </div>
+            )}
 
-              {filteredEvents.map((event) => {
-                const projected = japanMap.projection([event.longitude, event.latitude]);
-                const fallback = projectToMap(event.latitude, event.longitude);
-                const [x, y] = projected ?? [fallback.x, fallback.y];
-                const highlighted = event.id === selectedEvent.id;
-                const tone = magnitudeTone(event.magnitude);
+            {googleMapsApiKey && isLoaded && (
+              <GoogleMap
+                mapContainerClassName="map-canvas"
+                center={mapCenter}
+                zoom={selectedEvent.magnitude >= 6 ? 5.8 : 5.2}
+                options={mapOptions}
+              >
+                {filteredEvents.map((event) => {
+                  const tone = magnitudeTone(event.magnitude);
+                  const highlighted = event.id === selectedEvent.id;
 
-                return (
-                  <g key={event.id}>
-                    <circle
-                      cx={x}
-                      cy={y}
-                      r={highlighted ? 4 : 2.6}
-                      className={`quake-dot quake-dot-${tone}`}
+                  return (
+                    <MarkerF
+                      key={event.id}
+                      position={{ lat: event.latitude, lng: event.longitude }}
+                      icon={markerIconByTone[tone]}
+                      zIndex={highlighted ? 120 : 80}
+                      title={`${event.place} M${event.magnitude.toFixed(1)} ${event.intensityLabel}`}
                       onClick={() => setSelectedId(event.id)}
                     />
-                    {highlighted && <circle cx={x} cy={y} r={7.5} className="quake-pulse" />}
-                  </g>
-                );
-              })}
-            </svg>
+                  );
+                })}
+              </GoogleMap>
+            )}
           </div>
 
           <div className="legend-row">

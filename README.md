@@ -5,7 +5,7 @@
 ## Features
 
 - 気象庁の地震一覧 JSON を取得して最新イベントを表示
-- 日本地図上に震源位置をプロット
+- Google Maps 上に震源位置をプロット
 - マグニチュード閾値でイベントを絞り込み
 - 選択中イベントの規模、深さ、震度、時刻、座標を表示
 - API 取得に失敗した場合は内蔵デモデータへフォールバック
@@ -15,9 +15,7 @@
 - Next.js 16
 - React 19
 - TypeScript
-- d3-geo
-- topojson-client
-- world-atlas
+- @react-google-maps/api
 
 ## Data Source
 
@@ -37,6 +35,16 @@
 ```bash
 npm install
 ```
+
+### Google Maps API Key
+
+Google Maps JavaScript API を使うため、プロジェクト直下に `.env.local` を作成して以下を設定します。
+
+```bash
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_api_key
+```
+
+Google Cloud 側で Maps JavaScript API を有効化し、必要に応じてリファラー制限を設定してください。
 
 ### Development
 

@@ -195,69 +195,33 @@ button {
   border-radius: 24px;
   overflow: hidden;
   border: 1px solid rgba(91, 231, 213, 0.1);
+  min-height: 520px;
 }
 
-.map-svg {
+.map-canvas {
   width: 100%;
-  min-height: 520px;
+  height: 520px;
   display: block;
 }
 
-.map-land {
-  fill: rgba(133, 175, 212, 0.14);
-  stroke: rgba(189, 222, 248, 0.08);
-  stroke-width: 0.6;
+.map-fallback {
+  min-height: 520px;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  gap: 10px;
+  padding: 24px;
+  background: linear-gradient(180deg, rgba(9, 16, 28, 0.9), rgba(7, 13, 22, 0.96));
 }
 
-.map-coastline {
-  fill: none;
-  stroke: rgba(237, 247, 255, 0.88);
-  stroke-width: 1.1;
-  filter: drop-shadow(0 0 10px rgba(115, 211, 255, 0.18));
+.map-fallback h3 {
+  margin: 0;
+  font-size: 1.1rem;
 }
 
-.map-grid {
-  stroke: rgba(191, 219, 242, 0.08);
-  stroke-width: 0.3;
-}
-
-.map-label {
-  fill: rgba(232, 242, 251, 0.6);
-  font-size: 4px;
-}
-
-.quake-dot {
-  cursor: pointer;
-  stroke: rgba(255, 255, 255, 0.9);
-  stroke-width: 0.8;
-}
-
-.quake-dot-calm {
-  fill: var(--accent);
-}
-
-.quake-dot-warning {
-  fill: var(--warning);
-}
-
-.quake-dot-danger {
-  fill: var(--danger);
-}
-
-.quake-pulse {
-  fill: none;
-  stroke: rgba(255, 255, 255, 0.8);
-  stroke-width: 0.7;
-  stroke-dasharray: 1.6 1.6;
-  animation: pulse 2.5s infinite linear;
-}
-
-@keyframes pulse {
-  to {
-    transform: scale(1.2);
-    transform-origin: center;
-    opacity: 0;
-  }
+.map-fallback p {
+  margin: 0;
+  color: var(--muted);
 }
 
 .legend-row {
@@ -386,7 +350,13 @@ button {
     grid-template-columns: 1fr;
   }
 
-  .map-svg {
+  .map-frame {
+    min-height: 420px;
+  }
+
+  .map-canvas,
+  .map-fallback {
+    height: 420px;
     min-height: 420px;
   }
 }
