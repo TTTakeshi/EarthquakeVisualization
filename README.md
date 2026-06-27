@@ -2,6 +2,10 @@
 
 気象庁の公開地震一覧をもとに、日本周辺の地震情報を地図・指標・一覧で確認できる Next.js ダッシュボードです。
 
+## 画面イメージ
+
+![Earthquake Visualization UI](UI.png)
+
 ## Features
 
 - 気象庁の地震一覧 JSON を取得して最新イベントを表示
