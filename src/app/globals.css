@@ -46,7 +46,7 @@ button {
 .shell {
   width: min(1720px, calc(100vw - 64px));
   margin: 0 auto;
-  padding: 32px 0 48px;
+  padding: 24px 0 32px;
 }
 
 .hero-card,
@@ -59,11 +59,11 @@ button {
 
 .hero-card {
   border-radius: 28px;
-  padding: 28px;
+  padding: 22px;
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(390px, 0.75fr);
-  gap: 24px;
-  margin-bottom: 22px;
+  gap: 18px;
+  margin-bottom: 18px;
 }
 
 .hero-copy h1,
@@ -74,7 +74,7 @@ button {
 }
 
 .hero-copy h1 {
-  font-size: clamp(2rem, 4vw, 4.2rem);
+  font-size: clamp(1.9rem, 3vw, 3.3rem);
   max-width: 12ch;
 }
 
@@ -99,7 +99,7 @@ button {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 24px;
+  margin-top: 16px;
 }
 
 .chip {
@@ -107,7 +107,7 @@ button {
   background: rgba(7, 17, 29, 0.6);
   color: var(--text);
   border-radius: 999px;
-  padding: 10px 14px;
+  padding: 8px 12px;
   transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
 }
 
@@ -129,8 +129,8 @@ button {
 
 .hero-stats {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .stat-card,
@@ -142,32 +142,41 @@ button {
 }
 
 .stat-card {
-  padding: 18px;
+  padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .stat-card strong {
-  font-size: 1.6rem;
+  font-size: 1.3rem;
 }
 
 .dashboard-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.55fr) minmax(360px, 0.85fr);
-  gap: 22px;
-  margin-bottom: 22px;
+  gap: 18px;
+  margin-bottom: 18px;
 }
 
 .insight-grid {
   display: grid;
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-  gap: 22px;
+  gap: 18px;
 }
 
 .panel {
   border-radius: 28px;
-  padding: 22px;
+  padding: 18px;
+}
+
+.map-panel,
+.detail-panel,
+.chart-panel,
+.list-panel {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .sticky-panel {
@@ -183,7 +192,7 @@ button {
 }
 
 .panel-header h2 {
-  font-size: 1.42rem;
+  font-size: 1.24rem;
   margin-top: 6px;
 }
 
@@ -200,7 +209,7 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  margin: 0 0 14px;
+  margin: 0 0 12px;
   padding: 9px 14px;
   border-radius: 999px;
   border: 1px solid rgba(141, 174, 201, 0.18);
@@ -237,17 +246,19 @@ button {
   border-radius: 24px;
   overflow: hidden;
   border: 1px solid rgba(91, 231, 213, 0.1);
-  min-height: 560px;
+  min-height: 0;
+  flex: 1;
 }
 
 .map-canvas {
   width: 100%;
-  height: 560px;
+  height: 100%;
   display: block;
 }
 
 .map-fallback {
-  min-height: 560px;
+  min-height: 0;
+  height: 100%;
   display: grid;
   place-content: center;
   text-align: center;
@@ -291,7 +302,7 @@ button {
 .detail-card,
 .timeline-card,
 .forecast-card {
-  padding: 18px;
+  padding: 14px;
 }
 
 .chart-panel {
@@ -300,26 +311,27 @@ button {
 
 .chart-grid {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  min-height: 0;
 }
 
 .chart-card {
   border-radius: 22px;
   background: linear-gradient(180deg, rgba(14, 24, 40, 0.95), rgba(9, 18, 31, 0.9));
   border: 1px solid rgba(141, 174, 201, 0.12);
-  padding: 16px;
+  padding: 14px;
 }
 
 .chart-card h3 {
   margin: 0;
-  font-size: 1.03rem;
+  font-size: 0.98rem;
 }
 
 .chart-card p {
-  margin: 8px 0 16px;
+  margin: 8px 0 12px;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: 0.84rem;
 }
 
 .forecast-card {
@@ -462,7 +474,7 @@ button {
 }
 
 .detail-card {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .detail-card h3,
@@ -474,8 +486,8 @@ button {
 .detail-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  margin: 18px 0 0;
+  gap: 10px;
+  margin: 14px 0 0;
 }
 
 .detail-grid dt {
@@ -491,27 +503,31 @@ button {
 
 .band-list {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .band-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 14px;
+  padding: 10px 12px;
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.03);
 }
 
 .list-panel {
   padding-bottom: 22px;
+  min-height: 0;
 }
 
 .list-scroll {
-  max-height: 790px;
+  max-height: none;
+  height: 100%;
   overflow: auto;
   padding-right: 6px;
   scrollbar-gutter: stable;
+  flex: 1;
+  min-height: 0;
 }
 
 .list-grid {
@@ -526,9 +542,9 @@ button {
   background: linear-gradient(180deg, rgba(14, 23, 38, 0.95), rgba(9, 16, 27, 0.9));
   color: inherit;
   border-radius: 22px;
-  padding: 18px;
+  padding: 14px;
   display: grid;
-  gap: 12px;
+  gap: 10px;
   transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
 }
 
@@ -548,12 +564,12 @@ button {
   gap: 10px;
   flex-wrap: wrap;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: 0.82rem;
 }
 
 .event-time {
   color: rgba(232, 242, 251, 0.7);
-  font-size: 0.92rem;
+  font-size: 0.84rem;
 }
 
 @media (max-width: 1080px) {
@@ -609,13 +625,38 @@ button {
 }
 
 @media (min-width: 1320px) {
+  .shell {
+    display: grid;
+    height: 100dvh;
+    overflow: hidden;
+    grid-template-rows: auto minmax(0, 1.05fr) minmax(0, 0.95fr);
+  }
+
+  .hero-card,
+  .dashboard-grid,
+  .insight-grid {
+    min-height: 0;
+  }
+
+  .hero-card {
+    grid-template-columns: minmax(0, 1.1fr) minmax(420px, 0.9fr);
+  }
+
+  .dashboard-grid,
+  .insight-grid {
+    align-items: stretch;
+  }
+
+  .detail-panel {
+    overflow: auto;
+    scrollbar-gutter: stable;
+  }
+
   .sticky-panel {
     position: sticky;
     top: 24px;
-    max-height: calc(100vh - 36px);
-    overflow: auto;
+    max-height: calc(100dvh - 36px);
     padding-right: 10px;
-    scrollbar-gutter: stable;
   }
 }
 
